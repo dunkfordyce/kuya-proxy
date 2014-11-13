@@ -8,7 +8,7 @@ var http = require('http'),
                 require('findup-sync')('package.json')
             ).toString()
         ), {
-            auth_domains: [],
+            auth_re: "mydomain.co.uk$",
             auth: 'user:pass',
             debug: false,
             dev_src: 'http://foo',
@@ -16,18 +16,19 @@ var http = require('http'),
             port: 5005
         }
     ),
+    auth_re = new RegExp(config.auth_re),
     pass = 'Basic '+require('btoa')(config.auth),
     proxy = httpProxy.createProxyServer({secure: false});
 
 function should_add_auth(url) { 
-    return config.auth_domains.indexOf(url.hostname) != -1;
+    return auth_re.test(url.hostname);
 }
 
 proxy.on('proxyReq', function(proxyReq, req, res, options) {
     var u = url.parse(req.url);
     if( should_add_auth(url.parse(req.url)) ) { 
         if( config.debug ) { 
-            console.log('adding auth for', req.url);
+            console.log('adding auth for', req.url, pass);
         }
         proxyReq.setHeader('Authorization', pass);
     }
@@ -48,6 +49,10 @@ var server = http.createServer(function(req, res) {
         console.log(u.host, '-->', nu);
     }
     proxy.web(req, res, { target: nu});
+});
+
+server.on('upgrade', function (req, socket, head) {
+  proxy.ws(req, socket, head);
 });
 
 console.log('listening', config.port);
